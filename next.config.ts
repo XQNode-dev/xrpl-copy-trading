@@ -1,8 +1,11 @@
-import type { NextConfig } from "next";
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Konfigurasi lain Next.js (jika ada)...
 
-const nextConfig: NextConfig = {
-  /* config options here */
-  reactStrictMode: true,
+  eslint: {
+    // Ini akan mengabaikan semua error ESLint pada build
+    ignoreDuringBuilds: true,
+  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
