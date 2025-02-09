@@ -1,26 +1,23 @@
 // server.js
-import express from 'express';
-import { createServer } from 'http';
-import { Server as SocketIOServer } from 'socket.io';
-import next from 'next';
-import { setSocketIO } from './botManager.js';
+require('dotenv').config(); // Pastikan dotenv dipanggil paling atas
+
+console.log('DATABASE_URL:', process.env.DATABASE_URL);
+
+const express = require('express');
+const next = require('next');
+const http = require('http');
+const { Server: SocketIO } = require('socket.io');
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  const expressApp = express();
+  const server = express();
+  const httpServer = http.createServer(server);
 
-  expressApp.use(express.json());
-
-  const server = createServer(expressApp);
-
-  const io = new SocketIOServer(server, {
-    path: '/socket.io', 
-  });
-
-  setSocketIO(io);
+  // Inisialisasi Socket.IO dengan path default
+  const io = new SocketIO(httpServer, { path: '/socket.io' });
 
   io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
@@ -29,13 +26,12 @@ app.prepare().then(() => {
     });
   });
 
-  expressApp.all(/^\/(?!socket\.io).*/, (req, res) => {
-    return handle(req, res);
-  });
+  // Pastikan semua request kecuali ke /socket.io ditangani oleh Next.js
+  server.all(/^\/(?!socket\.io).*/, (req, res) => handle(req, res));
 
-  const PORT = process.env.PORT || 3000;
-  server.listen(PORT, (err) => {
+  const port = process.env.PORT || 3000;
+  httpServer.listen(port, (err) => {
     if (err) throw err;
-    console.log(`> Server is running on http://localhost:${PORT}`);
+    console.log(`> Server running on http://localhost:${port}`);
   });
 });

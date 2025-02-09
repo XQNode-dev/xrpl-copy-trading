@@ -1,17 +1,38 @@
-// pages/index.js
 import React, { useState, useEffect } from 'react'
 import Head from 'next/head'
 import io from 'socket.io-client'
 import { Line } from 'react-chartjs-2'
 import { Chart, registerables } from 'chart.js'
+import CryptoJS from 'crypto-js'
 
+// Register chart.js components
 Chart.register(...registerables)
 
+// Initialize socket client (only if window is defined)
 let socket
 if (typeof window !== 'undefined') {
-  socket = io()
+  socket = io({ path: '/socket.io' });
 }
 
+/* -------------------------------------------------------------------------- */
+/*                       AES ENCRYPTION HELPER FUNCTIONS                      */
+/* -------------------------------------------------------------------------- */
+const ENCRYPTION_KEY = "SUPER_SECRET_PASSPHRASE" // You should move this to an environment variable
+
+function encryptSeed(seed) {
+  if (!seed) return ""
+  return CryptoJS.AES.encrypt(seed, ENCRYPTION_KEY).toString()
+}
+
+function decryptSeed(ciphertext) {
+  if (!ciphertext) return ""
+  const bytes = CryptoJS.AES.decrypt(ciphertext, ENCRYPTION_KEY)
+  return bytes.toString(CryptoJS.enc.Utf8)
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               UTILITY FUNCTIONS                            */
+/* -------------------------------------------------------------------------- */
 function formatNumber(num, decimals = 2) {
   if (!num || isNaN(num)) return 'N/A'
   return parseFloat(num)
@@ -25,6 +46,9 @@ function dropsToXRP(drops) {
   return formatNumber(xrp, 2)
 }
 
+/* -------------------------------------------------------------------------- */
+/*                           COLLAPSIBLE COMPONENT                            */
+/* -------------------------------------------------------------------------- */
 function RawDataCollapsible({ data, title }) {
   const [open, setOpen] = useState(false)
   return (
@@ -47,10 +71,16 @@ function RawDataCollapsible({ data, title }) {
   )
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                   MAIN PAGE                                */
+/* -------------------------------------------------------------------------- */
 export default function Home() {
+  // State: ledger data
   const [ledgerData, setLedgerData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // State: Auto trading form
   const [autoForm, setAutoForm] = useState({
     userId: '',
     amount: '',
@@ -59,6 +89,8 @@ export default function Home() {
     destination: ''
   })
   const [autoMsg, setAutoMsg] = useState('')
+
+  // State: Copy trading form
   const [copyForm, setCopyForm] = useState({
     userId: '',
     leaderAddress: '',
@@ -67,16 +99,27 @@ export default function Home() {
     copyDestination: ''
   })
   const [copyMsg, setCopyMsg] = useState('')
+
+  // State: notifications
   const [notifications, setNotifications] = useState([])
+
+  // State: Chart
   const [chartData, setChartData] = useState(null)
   const [currentPrice, setCurrentPrice] = useState(null)
+
+  // State: wallet modal
   const [walletModal, setWalletModal] = useState(false)
   const [walletConnected, setWalletConnected] = useState(false)
   const [walletSecret, setWalletSecret] = useState('')
   const [walletAddress, setWalletAddress] = useState('')
   const [walletBalance, setWalletBalance] = useState('')
+
+  // State: mobile menu
   const [menuOpen, setMenuOpen] = useState(false)
 
+  /* ------------------------------------------------------------------------ */
+  /*                         SOCKET EVENTS LISTENER                           */
+  /* ------------------------------------------------------------------------ */
   useEffect(() => {
     if (socket) {
       socket.on('autotrade', (data) => {
@@ -97,6 +140,9 @@ export default function Home() {
     }
   }, [])
 
+  /* ------------------------------------------------------------------------ */
+  /*                          FETCH XRPL LEDGER DATA                          */
+  /* ------------------------------------------------------------------------ */
   useEffect(() => {
     async function fetchLedger() {
       try {
@@ -112,6 +158,9 @@ export default function Home() {
     fetchLedger()
   }, [])
 
+  /* ------------------------------------------------------------------------ */
+  /*                        FETCH CHART DATA (BINANCE)                        */
+  /* ------------------------------------------------------------------------ */
   useEffect(() => {
     async function fetchChartData() {
       try {
@@ -128,6 +177,7 @@ export default function Home() {
           return `${date.getHours()}:${("0" + date.getMinutes()).slice(-2)}`
         })
         const prices = data.map(item => parseFloat(item[4]))
+
         setCurrentPrice(prices[prices.length - 1])
         setChartData({
           labels,
@@ -150,16 +200,31 @@ export default function Home() {
     fetchChartData()
   }, [])
 
+  /* ------------------------------------------------------------------------ */
+  /*                          HANDLE WALLET CONNECT                           */
+  /* ------------------------------------------------------------------------ */
   const handleWalletConnect = async (e) => {
     e.preventDefault()
     try {
+      // Encrypt seed on the client
+      const encryptedSeed = encryptSeed(walletSecret.trim())
+
+      // Demonstration: Decrypt again on the client to create an XRPL wallet 
+      // (this is not ideal—on production, decryption should happen on the server).
+      const bytes = CryptoJS.AES.decrypt(encryptedSeed, ENCRYPTION_KEY)
+      const decryptedSeed = bytes.toString(CryptoJS.enc.Utf8)
+
+      // Use xrpl library to create a wallet
       const xrpl = await import('xrpl')
-      const wallet = xrpl.Wallet.fromSeed(walletSecret.trim())
+      const wallet = xrpl.Wallet.fromSeed(decryptedSeed)
       setWalletAddress(wallet.address)
+
+      // Fetch balance info from server (custom endpoint)
       const res = await fetch(`/api/wallet?address=${wallet.address}`)
       const data = await res.json()
       const balanceDrops = data.result?.account_data?.Balance
       setWalletBalance(dropsToXRP(balanceDrops))
+
       setWalletConnected(true)
       setWalletModal(false)
     } catch (err) {
@@ -168,14 +233,26 @@ export default function Home() {
     }
   }
 
+  /* ------------------------------------------------------------------------ */
+  /*                        HANDLE AUTO TRADE SUBMIT                          */
+  /* ------------------------------------------------------------------------ */
   const handleAutoSubmit = async (e) => {
     e.preventDefault()
     setAutoMsg('')
     try {
+      // Encrypt seed before sending it to the server
+      const encryptedSeed = encryptSeed(autoForm.secret.trim())
+
+      // Prepare payload with the encrypted seed
+      const payload = {
+        ...autoForm,
+        secret: encryptedSeed
+      }
+
       const res = await fetch('/api/autotrading/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(autoForm)
+        body: JSON.stringify(payload)
       })
       const data = await res.json()
       if (res.ok) {
@@ -188,14 +265,25 @@ export default function Home() {
     }
   }
 
+  /* ------------------------------------------------------------------------ */
+  /*                        HANDLE COPY TRADE SUBMIT                          */
+  /* ------------------------------------------------------------------------ */
   const handleCopySubmit = async (e) => {
     e.preventDefault()
     setCopyMsg('')
     try {
+      // Encrypt seed
+      const encryptedSeed = encryptSeed(copyForm.secret.trim())
+
+      const payload = {
+        ...copyForm,
+        secret: encryptedSeed
+      }
+
       const res = await fetch('/api/copytrading/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(copyForm)
+        body: JSON.stringify(payload)
       })
       const data = await res.json()
       if (res.ok) {
@@ -208,11 +296,15 @@ export default function Home() {
     }
   }
 
+  /* ------------------------------------------------------------------------ */
+  /*                               RENDERING UI                               */
+  /* ------------------------------------------------------------------------ */
   const ledger = ledgerData?.result?.ledger
   const ledgerIndex = ledger?.ledger_index || "N/A"
   const totalCoins = ledger?.total_coins ? dropsToXRP(ledger.total_coins) : "N/A"
   const txList = ledger?.transactions || []
 
+  // Dummy pairs for demonstration
   const dummyPairs = [
     { pair: 'XRP/USDT', lastPrice: '0.39', volume: '2,450,000' },
     { pair: 'XRP/BTC', lastPrice: '0.000016', volume: '1,120,000' },
@@ -230,7 +322,9 @@ export default function Home() {
           content="Production-ready XRPL auto/copy trading UI"
         />
       </Head>
+
       <div className="min-h-screen flex flex-col bg-slate-900 text-white">
+        {/* ---------------------------- HEADER / NAV --------------------------- */}
         <header className="bg-slate-800/90 shadow-2xl w-full px-4 py-3 md:px-8 md:py-4 relative">
           <div className="flex items-center justify-between">
             <div>
@@ -258,6 +352,7 @@ export default function Home() {
                 className="text-teal-300 focus:outline-none"
               >
                 {menuOpen ? (
+                  // Close (X) icon
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -267,6 +362,7 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 ) : (
+                  // Hamburger icon
                   <svg
                     className="w-7 h-7"
                     fill="none"
@@ -279,6 +375,8 @@ export default function Home() {
               </button>
             </div>
           </div>
+
+          {/* Collapsible mobile navigation */}
           <nav
             className={`flex flex-col md:flex-row md:items-center gap-4 mt-4 md:mt-2 transition-all duration-300 
             ${menuOpen ? 'block' : 'hidden md:flex'}`}
@@ -332,6 +430,7 @@ export default function Home() {
           </nav>
         </header>
 
+        {/* ------------------------ WALLET CONNECT MODAL ----------------------- */}
         {walletModal && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-80 z-50">
             <div className="bg-slate-800 p-6 md:p-8 rounded-lg shadow-2xl w-11/12 md:w-96">
@@ -372,8 +471,10 @@ export default function Home() {
           </div>
         )}
 
+        {/* ------------------------------ MAIN CONTENT ------------------------- */}
         <main className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto space-y-10">
+            {/* ------------------------- HERO SECTION ------------------------- */}
             <section className="bg-[radial-gradient(circle_at_top_left,_#0f172a,_#0f172a,_#1e293b_50%)] rounded-xl px-6 py-16 md:px-16 md:py-20 shadow-2xl flex flex-col items-center justify-center text-center relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900 opacity-50 pointer-events-none"></div>
               <h2 className="text-4xl md:text-5xl font-extrabold text-teal-300 z-10">
@@ -395,6 +496,7 @@ export default function Home() {
               </div>
             </section>
 
+            {/* ------------------ LOADING & ERROR STATES ---------------------- */}
             {loading ? (
               <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-teal-400"></div>
@@ -403,6 +505,7 @@ export default function Home() {
               <div className="text-red-500 text-2xl">{error.message}</div>
             ) : (
               <>
+                {/* --------------------- DASHBOARD SECTION --------------------- */}
                 <section id="dashboard">
                   <h2 className="text-3xl font-bold mb-6">Dashboard</h2>
                   <div className="bg-slate-800 p-4 md:p-5 rounded-lg border border-teal-600 mb-6 shadow-xl">
@@ -492,6 +595,7 @@ export default function Home() {
                   </div>
                 </section>
 
+                {/* -------------------- AUTO TRADING SECTION -------------------- */}
                 <section id="autotrading">
                   <h2 className="text-3xl font-bold mb-6">Auto Trading</h2>
                   <div className="bg-slate-800 p-6 md:p-8 rounded-lg shadow-2xl hover:shadow-teal-500/30 transition-shadow">
@@ -587,6 +691,7 @@ export default function Home() {
                   </div>
                 </section>
 
+                {/* -------------------- COPY TRADING SECTION -------------------- */}
                 <section id="copytrading">
                   <h2 className="text-3xl font-bold mb-6">Copy Trading</h2>
                   <div className="bg-slate-800 p-6 md:p-8 rounded-lg shadow-2xl hover:shadow-teal-500/30 transition-shadow">
@@ -663,8 +768,9 @@ export default function Home() {
                           onChange={(e) =>
                             setCopyForm({ ...copyForm, copyDestination: e.target.value })
                           }
-                          placeholder="rXXXXXXXXXXXXXXXXX"
+                          placeholder="(Ignored now - Leader's address is used)"
                           className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded text-lg text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          disabled
                         />
                       </div>
                       <button
@@ -680,6 +786,7 @@ export default function Home() {
                   </div>
                 </section>
 
+                {/* ------------------ LATEST TRANSACTIONS SECTION --------------- */}
                 <section id="latest-transactions">
                   <h2 className="text-3xl font-bold mb-6">Latest Transactions (XRPL)</h2>
                   <div className="bg-slate-800 p-6 md:p-8 rounded-lg shadow-2xl hover:shadow-teal-500/30 transition-shadow">
@@ -707,26 +814,7 @@ export default function Home() {
                   </div>
                 </section>
 
-                <section id="notifications">
-                  <h2 className="text-3xl font-bold mb-6">Notifications</h2>
-                  <div className="bg-slate-800 p-6 md:p-8 rounded-lg shadow-2xl hover:shadow-teal-500/30 transition-shadow max-h-56 overflow-auto">
-                    {notifications.length === 0 ? (
-                      <p className="text-lg text-gray-400">No notifications yet</p>
-                    ) : (
-                      <ul className="space-y-4">
-                        {notifications.map((n, idx) => (
-                          <li
-                            key={idx}
-                            className="p-4 bg-gray-700 rounded border border-gray-600"
-                          >
-                            <strong className="text-teal-300">{n.type}:</strong> {n.message}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </section>
-
+                {/* -------------------- RAW LEDGER DATA SECTION ----------------- */}
                 <section id="rawdata">
                   <h2 className="text-3xl font-bold mb-6">Raw Ledger Data</h2>
                   <RawDataCollapsible
@@ -738,6 +826,8 @@ export default function Home() {
             )}
           </div>
         </main>
+
+        {/* ----------------------------- FOOTER ------------------------------- */}
         <footer className="bg-slate-800/90 text-gray-400 text-center text-sm py-4">
           © 2025 XQNode - XRPL AUTO TRADE — All Rights Reserved
         </footer>
