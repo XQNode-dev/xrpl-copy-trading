@@ -6,25 +6,19 @@ module.exports = {
   ],
   theme: {
     extend: {
-      animation: {
-        "gradient-xy": "gradient-xy 5s ease infinite",
+      colors: {
+        // Warna-warna futuristik yang sedikit beda
+        "neo-black": "#080808",
+        "neo-dark": "#121212",
+        "neo-purple": "#9B5DEE",
+        "neo-pink": "#FF4BCD",
+        "neo-green": "#00FFA6",
+        "neo-grey": "#2C2C2C",
       },
-      keyframes: {
-        "gradient-xy": {
-          "0%, 100%": {
-            "background-size": "200% 200%",
-            "background-position": "left center",
-          },
-          "50%": {
-            "background-size": "200% 200%",
-            "background-position": "right center",
-          },
-        },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
       },
     },
   },
   plugins: [],
 };
-
-
-
