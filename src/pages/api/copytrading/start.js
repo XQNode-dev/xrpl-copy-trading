@@ -1,5 +1,5 @@
 // pages/api/copytrading/start.js
-import { startCopyTrading } from '../../../botManager.js';
+import { startCopyTrading } from '../../../../botManager';
 
 export default async function handler(req, res) {
   if (req.method === 'POST') {

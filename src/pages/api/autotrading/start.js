@@ -1,5 +1,5 @@
 // pages/api/autotrading/start.js
-import { startAutoTrading } from '../../../botManager.js';
+import { startAutoTrading } from '../../../../botManager';
 
 export default async function handler(req, res) {
   if (req.method === 'POST') {
