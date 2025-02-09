@@ -50,7 +50,7 @@ export default function LandingPage() {
             {/* NAV / BUTTONS */}
             <div className="flex flex-col md:flex-row items-center gap-4 mt-2 md:mt-0">
               <a
-                href="https://github.com/XQNode-dev/XQNODE-XRPL-AUTO-TRADE"
+                href="https://github.com/XQNode-dev/xrpl-copy-trading"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-teal-600 hover:bg-teal-500 text-sm md:text-base font-semibold text-white px-4 py-2 rounded-full shadow-lg 
