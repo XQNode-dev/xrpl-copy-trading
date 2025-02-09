@@ -1,8 +1,7 @@
 // server.js
-require('dotenv').config(); // Pastikan dotenv dipanggil paling atas
+require('dotenv').config(); 
 
 console.log('DATABASE_URL:', process.env.DATABASE_URL);
-
 const express = require('express');
 const next = require('next');
 const http = require('http');
@@ -16,7 +15,6 @@ app.prepare().then(() => {
   const server = express();
   const httpServer = http.createServer(server);
 
-  // Inisialisasi Socket.IO dengan path default
   const io = new SocketIO(httpServer, { path: '/socket.io' });
 
   io.on('connection', (socket) => {
@@ -26,7 +24,6 @@ app.prepare().then(() => {
     });
   });
 
-  // Pastikan semua request kecuali ke /socket.io ditangani oleh Next.js
   server.all(/^\/(?!socket\.io).*/, (req, res) => handle(req, res));
 
   const port = process.env.PORT || 3000;
