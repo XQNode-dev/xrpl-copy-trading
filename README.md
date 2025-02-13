@@ -65,8 +65,8 @@ Our platform leverages XRPL’s near-instant settlement and minimal transaction 
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/your-username/xqnode-xrplquantum-node.git
-   cd xqnode-xrplquantum-node
+   git clone https://github.com/XQNode-dev/xrpl-copy-trading.git
+  
    ```
 
 2. **Install Dependencies**
